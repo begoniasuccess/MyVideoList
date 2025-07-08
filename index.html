@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Video List Generator</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: auto;
+      }
+      .avideo {
+        border: 1px solid #ccc;
+        padding: 8px;
+        border-radius: 4px;
+        background: #fafafa;
+      }
+      
+      .avideo iframe {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        left: 0;
+        top: 0;
+      }
+      .avideo img {
+        width: 100%;
+        cursor: pointer;
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      .input-group {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Video List Generator</h1>
+
+    <div class="input-group">
+      <input
+        type="text"
+        id="playlistName"
+        placeholder="請輸入名稱"
+        style="width: 30%"
+      />
+      <input
+        type="text"
+        id="playlistUrl"
+        placeholder="請貼上播放清單網址"
+        style="width: 45%"
+      />
+      <button onclick="loadPlaylist()">載入並儲存</button>
+    </div>
+
+    <div class="input-group">
+      <select id="savedList" onchange="loadSavedUrl()" style="width: 80%">
+        <option value="">-- 選擇已儲存的清單 --</option>
+      </select>
+      <button onclick="deleteSelected()">刪除</button>
+    </div>
+
+    <div class="input-group">
+      <label for="pageSize">每頁顯示數量：</label>
+      <select id="pageSize" onchange="renderPage()">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+      </select>
+    </div>
+
+    <div class="input-group" id="paginationControls" style="margin-top: 10px">
+      <!-- 分頁按鈕會生成在這 -->
+    </div>
+
+    <div id="videoContainer"></div>
+
+    <script>
+      const STORAGE_KEY = "yt_playlists_v2"; // 新版本格式
+
+      // 儲存清單（包含 name + url）
+      function saveToLocalStorage(name, url) {
+        if (!name || !url) return;
+
+        let saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+        // 檢查是否已有相同 URL，則更新名稱
+        const index = saved.findIndex((item) => item.url === url);
+        if (index >= 0) {
+          saved[index].name = name;
+        } else {
+          saved.push({ name, url });
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        updateSavedList();
+      }
+
+      // 更新下拉選單
+      function updateSavedList() {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        const select = document.getElementById("savedList");
+        select.innerHTML = '<option value="">-- 選擇已儲存的清單 --</option>';
+        saved.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = item.url;
+          opt.textContent = `${item.name} (${item.url})`;
+          select.appendChild(opt);
+        });
+      }
+
+      // 載入選單中選定的網址
+      function loadSavedUrl() {
+        const url = document.getElementById("savedList").value;
+        if (!url) return;
+
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        const found = saved.find((item) => item.url === url);
+
+        if (found) {
+          document.getElementById("playlistUrl").value = found.url;
+          document.getElementById("playlistName").value = found.name;
+          loadPlaylist(false); // 不重複儲存
+        }
+      }
+
+      // 刪除目前選定的項目
+      function deleteSelected() {
+        const url = document.getElementById("savedList").value;
+        if (!url) return;
+        let saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        saved = saved.filter((item) => item.url !== url);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        updateSavedList();
+        alert("已刪除");
+      }
+
+      let allVideos = []; // 存放目前播放清單影片
+      let currentPage = 1;
+      
+      async function loadPlaylist(save = true) {
+        const nameInput = document.getElementById("playlistName");
+        const urlInput = document.getElementById("playlistUrl");
+        const container = document.getElementById("videoContainer");
+        const name = nameInput.value.trim();
+        const url = urlInput.value.trim();
+        if (!url) return;
+      
+        if (save) saveToLocalStorage(name, url);
+      
+        container.innerHTML = "Loading...";
+      
+        try {
+          const res = await fetch("http://127.0.0.1:5000/api/playlist", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const data = await res.json();
+      
+          if (data.error) {
+            container.innerHTML = "發生錯誤：" + data.error;
+            return;
+          }
+      
+          if (!nameInput.value.trim() && data.title) {
+            nameInput.value = data.title;
+          }
+      
+          allVideos = data.videos || [];
+          currentPage = 1;
+      
+          renderPage();
+        } catch (error) {
+          container.innerHTML = "無法連接伺服器：" + error.message;
+        }
+      }
+      
+      function renderPage() {
+        const container = document.getElementById("videoContainer");
+        const pageSize = parseInt(document.getElementById("pageSize").value);
+        const totalPages = Math.ceil(allVideos.length / pageSize);
+      
+        if (currentPage > totalPages) currentPage = totalPages || 1;
+      
+        container.innerHTML = "";
+      
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = Math.min(startIndex + pageSize, allVideos.length);
+      
+        for (let i = startIndex; i < endIndex; i++) {
+          const video = allVideos[i];
+          const div = document.createElement("div");
+          div.className = "avideo";
+          div.setAttribute("data-id", video.id);
+          div.style.position = "relative";
+          div.style.marginBottom = "20px";
+      
+          // 縮圖 + 標題
+          div.innerHTML = `
+            <div style="display:flex; align-items:center; cursor:pointer;" onclick="loadIframe(this)">
+              <div>
+                <img src="https://img.youtube.com/vi/${video.id}/default.jpg" alt="${video.title}" style="width:120px; height:90px; object-fit:cover; margin-right:10px;">
+              </div>              
+              <div style="flex:1;">${video.title}</div>
+            </div>
+          `;
+      
+          container.appendChild(div);
+        }
+      
+        renderPaginationControls(totalPages);
+      }
+      
+      function renderPaginationControls(totalPages) {
+        const paginationDiv = document.getElementById("paginationControls");
+        paginationDiv.innerHTML = "";
+      
+        if (totalPages <= 1) return;
+      
+        // 前一頁按鈕
+        const prevBtn = document.createElement("button");
+        prevBtn.textContent = "上一頁";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => {
+          if (currentPage > 1) {
+            currentPage--;
+            renderPage();
+          }
+        };
+        paginationDiv.appendChild(prevBtn);
+      
+        // 頁碼按鈕（最多顯示 5 頁）
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+      
+        if (endPage - startPage < 4) {
+          startPage = Math.max(1, endPage - 4);
+        }
+      
+        for (let i = startPage; i <= endPage; i++) {
+          const btn = document.createElement("button");
+          btn.textContent = i;
+          if (i === currentPage) {
+            btn.disabled = true;
+            btn.style.fontWeight = "bold";
+          }
+          btn.onclick = () => {
+            currentPage = i;
+            renderPage();
+          };
+          paginationDiv.appendChild(btn);
+        }
+      
+        // 下一頁按鈕
+        const nextBtn = document.createElement("button");
+        nextBtn.textContent = "下一頁";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => {
+          if (currentPage < totalPages) {
+            currentPage++;
+            renderPage();
+          }
+        };
+        paginationDiv.appendChild(nextBtn);
+      }
+      
+      
+      // 點擊縮圖展開 iframe 播放影片
+      function loadIframe(divOrImg) {
+        // divOrImg 是點擊區域的元素，可能是 <div> 包住 <img> 和標題
+        // 往上找最近有 data-id 的祖先元素
+        let targetDiv = divOrImg;
+        while (targetDiv && !targetDiv.getAttribute("data-id")) {
+          targetDiv = targetDiv.parentElement;
+        }
+        if (!targetDiv) return;
+
+        const videoId = targetDiv.getAttribute("data-id");
+        targetDiv.innerHTML = `<iframe width="100%" height="360" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>`;
+      }
+
+      window.onload = () => {
+        updateSavedList();
+        document.getElementById("pageSize").value = "10";
+      };
+    </script>
+  </body>
+</html>
