@@ -11,13 +11,12 @@
       body {
         font-family: sans-serif;
         padding: 20px;
-        max-width: 500px;
+        max-width: 800px;
         margin: auto;
       }
       #videoPlayer {
         width: 100%;
         aspect-ratio: 16/9;
-        margin-bottom: 20px;
       }
       .video-list-item {
         cursor: pointer;
@@ -33,10 +32,10 @@
         margin-right: 10px;
       }
       #videoListContainer {
-        max-height: 40vh;
+        max-height: 80vh;
         overflow-y: auto;
         border: 1px solid #ccc;
-        border-radius: 5px;
+        border-radius: 0 0 5px 5px;
         background: #f9f9f9;
       }
     </style>
@@ -44,6 +43,22 @@
   <body>
     <h1 class="mb-4">Video List Generator</h1>
 
+    <div id="videoPlayer" class="bg-light d-flex align-items-center justify-content-center border">尚未選擇影片</div>
+    <div id="videoListContainer" class="mb-3"></div>
+
+    <div class="mb-3">
+      <label for="pageSize" class="form-label">每頁顯示數量：</label>
+      <select id="pageSize" class="form-select w-auto d-inline-block" onchange="renderPage()">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+      </select>
+    </div>
+
+    <div id="paginationControls" class="mt-3 mb-3"></div>
+
+    
     <div class="row g-2 mb-3">
       <div class="col-md-3">
         <input type="text" id="playlistName" class="form-control" placeholder="請輸入名稱" />
@@ -66,22 +81,6 @@
         <button class="btn btn-danger w-100" onclick="deleteSelected()">刪除</button>
       </div>
     </div>
-
-    <div class="mb-3">
-      <label for="pageSize" class="form-label">每頁顯示數量：</label>
-      <select id="pageSize" class="form-select w-auto d-inline-block" onchange="renderPage()">
-        <option value="5">5</option>
-        <option value="10" selected>10</option>
-        <option value="20">20</option>
-        <option value="50">50</option>
-      </select>
-    </div>
-
-    <div id="videoPlayer" class="mb-4 bg-light d-flex align-items-center justify-content-center border">尚未選擇影片</div>
-
-    <div id="videoListContainer"></div>
-
-    <div id="paginationControls" class="mt-3"></div>
 
     <script>
       const STORAGE_KEY = "yt_playlists_v2";
@@ -212,7 +211,7 @@
       }
 
       function playVideo(videoId) {
-        $("#videoPlayer").html(`<iframe width="100%" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>`);
+        $("#videoPlayer").html(`<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>`);
       }
 
       $(function () {
